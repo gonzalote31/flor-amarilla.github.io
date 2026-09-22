@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Constelación de Recuerdos</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 100%;
+            height: 100vh;
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 50%, #0d1929 100%);
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        canvas {
+            display: block;
+            cursor: crosshair;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        .modal-content {
+            background: rgba(20, 25, 50, 0.95);
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            position: relative;
+            border: 2px solid rgba(255, 200, 0, 0.3);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            animation: slideUp 0.3s ease-out;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 300px;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 200, 0, 0.2);
+            border: 2px solid rgba(255, 200, 0, 0.5);
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 24px;
+            color: #ffc800;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .close-btn:hover {
+            background: rgba(255, 200, 0, 0.4);
+            transform: scale(1.1);
+        }
+
+        .memory-image {
+            width: 100%;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .memory-description {
+            color: #e0e0e0;
+            font-size: 16px;
+            line-height: 1.6;
+            text-align: center;
+            width: 100%;
+        }
+        
+        .memory-description h2 {
+            margin: 0;
+            padding: 0;
+        }
+        
+        .memory-description p {
+            margin: 0;
+            padding: 0;
+        }
+
+        /* Audio controles invisibles */
+        audio {
+            display: none;
+        }
+
+        /* Tooltip de instrucciones */
+        .tooltip {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 200, 0, 0.1);
+            border: 1px solid rgba(255, 200, 0, 0.3);
+            color: #ffc800;
+            padding: 12px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            text-align: center;
+            pointer-events: none;
+            animation: fadeInUp 0.8s ease-out;
+            z-index: 100;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    
+    <!-- Audio de fondo -->
+    <audio id="backgroundMusic" autoplay loop>
+        <source src="assets/flores_amarillas.mp3" type="audio/mpeg">
+    </audio>
+
+    <!-- Modal de recuerdo -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <button class="close-btn">&times;</button>
+            <img id="memoryImage" class="memory-image" alt="Recuerdo">
+            <p id="memoryDescription" class="memory-description"></p>
+        </div>
+    </div>
+
+    <div class="tooltip">Pasa el mouse por las estrellas ✨ Haz clic estrella que forman los pétalos o en la estrella del centro para ver recuerdos</div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const modal = document.getElementById('modal');
+        const closeBtn = document.querySelector('.close-btn');
+        const audio = document.getElementById('backgroundMusic');
+
+        // Configurar canvas
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Datos de fotos y recuerdos
+        // TODOS LOS 10 PÉTALOS TIENEN RECUERDOS (0-9)
+        // ESTRUCTURA: imageUrl y description para cada pétalo
+        const memories = {
+            0: {
+                imageUrl: '/images/1.jpeg', // Reemplaza con la URL de tu imagen
+                description: 'Nuestro primer viaje juntos, lleno de risas y aventuras.'
+            },
+            1: {
+                imageUrl: '/images/2.jpeg', // Reemplaza con la URL de tu imagen
+                description: 'Nuestro si fueramos Huevitos XD.'
+            },
+            2: {
+                imageUrl: '/images/3.jpeg', // Reemplaza con la URL de tu imagen
+                description: 'Nosotros en el viaje de pueblito.'
+            },
+            3: {
+                imageUrl: '/images/4.jpeg', // Reemplaza con la URL de tu imagen
+                description: 'Con la más hermosa que me enamora cada día.'
+            },
+            4: {
+                imageUrl: '/images/5.jpeg', // Reemplaza con la URL de tu imagen
+                description: 'Si fueramos negros XD.'
+            },
+            5: {
+                imageUrl: '/images/6.jpeg', // Reemplaza con la URL de tu imagen
+                description: 'Compartiendo un momento especial antes de perder el hígado.'
+            },
+            6: {
+                imageUrl: '/images/7.jpeg', // Reemplaza con la URL de tu imagen
+                description: 'Disfrutando del anime con mi niña otaku.'
+            },
+            7: {
+                imageUrl: '/images/8.jpeg', // Reemplaza con la URL de tu imagen
+                description: 'Desde otra perpespectiva de nuestros besos xoxo.'
+            },
+            8: {
+                imageUrl: '/images/9.jpeg', // Reemplaza con la URL de tu imagen
+                description: 'Demostrando que somos los menos racistas del mundo, pero los más lindos.'
+            },
+            9: {
+                imageUrl: '/images/10.jpeg', // Reemplaza con la URL de tu imagen
+                description: 'Con mi niña hermosa, le amo mucho.'
+            },
+            18: {
+                imageUrl: 'https://via.placeholder.com/500?text=Flor+Amarilla', // Puedes reemplazar con una imagen de flor amarilla
+                description: false, // Indicador especial para texto centrado sin imagen
+                titleText: '🌼 Feliz Día de las Flores Amarillas 🌼',
+                bodyText: 'Aunque no le vea en este día, quiero que acepte esta flor amarilla virtual hecha para usted. Le amo mucho mi amorcito.'
+            }
+        };
+
+        // Generar estrellas: 5 externas + 5 intermedias (estrella de 5 puntas)
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const externalRadius = 200; // Radio de puntos externos
+        const intermediateRadius = 120; // Radio de puntos intermedios
+
+        let stars = [];
+        let mousePos = { x: 0, y: 0 };
+
+        // Crear 10 estrellas: 5 externas + 5 intermedias
+        // Patrón: 0(ext), 1(int), 2(ext), 3(int), 4(ext), 5(int), 6(ext), 7(int), 8(ext), 9(int)
+        for (let i = 0; i < 10; i++) {
+            const isExternal = i % 2 === 0; // 0, 2, 4, 6, 8 son externos
+            const baseAngle = Math.PI / 5; // Ángulo entre puntos externos (72°)
+            
+            let angle, radius;
+            if (isExternal) {
+                // Puntos externos: 0°, 72°, 144°, 216°, 288°
+                angle = (i / 2) * baseAngle * 2;
+                radius = externalRadius;
+            } else {
+                // Puntos intermedios: entre los externos
+                angle = ((i - 1) / 2 + 0.5) * baseAngle * 2;
+                radius = intermediateRadius;
+            }
+
+            const x = centerX + Math.cos(angle) * radius;
+            const y = centerY + Math.sin(angle) * radius;
+            
+            stars.push({
+                x: x,
+                y: y,
+                radius: 3,
+                color: '#fffacd', // Amarillo muy claro
+                isHighlighted: true, // TODOS PARPADEAN
+                isPetal: true,
+                id: i,
+                hasMemory: true,
+                angle: angle,
+                phaseOffset: Math.random() * Math.PI * 2 // Offset aleatorio para parpadeo independiente
+            });
+        }
+
+        // Crear 8 estrellas naranjas en el centro (octógono)
+        const coreStars = 8;
+        const coreRadius = 60;
+        for (let i = 0; i < coreStars; i++) {
+            const angle = (i / coreStars) * Math.PI * 2;
+            const x = centerX + Math.cos(angle) * coreRadius;
+            const y = centerY + Math.sin(angle) * coreRadius;
+            
+            stars.push({
+                x: x,
+                y: y,
+                radius: 2.5,
+                color: '#fffacd', // Amarillo claro (mismo que pétalos)
+                isHighlighted: true, // También parpadea
+                isPetal: false,
+                id: 10 + i,
+                hasMemory: false,
+                phaseOffset: Math.random() * Math.PI * 2 // Offset aleatorio
+            });
+        }
+
+        // Agregar estrella central
+        stars.push({
+            x: centerX,
+            y: centerY,
+            radius: 3.5,
+            color: '#fffacd', // Amarillo claro (mismo que pétalos)
+            isHighlighted: true, // También parpadea
+            isPetal: false,
+            id: 18,
+            hasMemory: true, // Ahora es clickeable
+            phaseOffset: Math.random() * Math.PI * 2 // Offset aleatorio
+        });
+
+        // Crear estrellas dispersas por toda la pantalla (no conectadas)
+        const scatterCount = 200;
+        for (let i = 0; i < scatterCount; i++) {
+            const x = Math.random() * canvas.width;
+            const y = Math.random() * canvas.height;
+            
+            stars.push({
+                x: x,
+                y: y,
+                radius: Math.random() * 1.2 + 0.3,
+                color: '#fffacd', // Amarillo claro (mismo que todas)
+                isHighlighted: true, // También parpadean
+                isPetal: false,
+                id: 19 + i,
+                hasMemory: false,
+                phaseOffset: Math.random() * Math.PI * 2 // Offset aleatorio
+            });
+        }
+
+        // Crear tallo/tronco con estrellas verdes (desde la estrella externa inferior hacia abajo)
+        // La estrella externa inferior real es la ID 2 (ángulo 72°, la de mayor Y = la de más abajo en pantalla)
+        const externalBottomStar = stars.find(s => s.id === 2); // Estrella externa apuntando hacia abajo
+        const stemStars = 3;
+        const stemStartY = externalBottomStar ? externalBottomStar.y : centerY + externalRadius; // Comenzar desde estrella externa
+        const stemStartX = externalBottomStar ? externalBottomStar.x : centerX; // X también desde la estrella externa
+        const stemLength = canvas.height - stemStartY - 50; // Largo total del tallo
+        const stemSpacing = stemLength / (stemStars - 1); // Para que la última estrella caiga justo al final
+        
+        for (let i = 0; i < stemStars; i++) {
+            const x = stemStartX;
+            const y = stemStartY + (i * stemSpacing);
+            
+            stars.push({
+                x: x,
+                y: y,
+                radius: 2,
+                color: '#fffacd', // Amarillo (mismo que todas)
+                isHighlighted: true,
+                isPetal: false,
+                id: 219 + i,
+                hasMemory: false,
+                phaseOffset: Math.random() * Math.PI * 2,
+                isStem: true // Marcador especial para el tallo
+            });
+        }
+
+        // Crear hojas del tallo (a los lados) - SIN CONEXIONES HORIZONTALES
+        // Hoja izquierda superior (a 1/3 del tallo)
+        stars.push({
+            x: stemStartX - 60,
+            y: stemStartY + (stemLength / 3),
+            radius: 2,
+            color: '#fffacd',
+            isHighlighted: true,
+            isPetal: false,
+            id: 234,
+            hasMemory: false,
+            phaseOffset: Math.random() * Math.PI * 2,
+            isLeaf: true
+        });
+
+        // Hoja derecha superior (a 1/3 del tallo)
+        stars.push({
+            x: stemStartX + 60,
+            y: stemStartY + (stemLength / 3),
+            radius: 2,
+            color: '#fffacd',
+            isHighlighted: true,
+            isPetal: false,
+            id: 235,
+            hasMemory: false,
+            phaseOffset: Math.random() * Math.PI * 2,
+            isLeaf: true
+        });
+
+        // Hoja izquierda inferior (a 2/3 del tallo)
+        stars.push({
+            x: stemStartX - 50,
+            y: stemStartY + (stemLength * 2 / 3),
+            radius: 2,
+            color: '#fffacd',
+            isHighlighted: true,
+            isPetal: false,
+            id: 236,
+            hasMemory: false,
+            phaseOffset: Math.random() * Math.PI * 2,
+            isLeaf: true
+        });
+
+        // Hoja derecha inferior (a 2/3 del tallo)
+        stars.push({
+            x: stemStartX + 50,
+            y: stemStartY + (stemLength * 2 / 3),
+            radius: 2,
+            color: '#fffacd',
+            isHighlighted: true,
+            isPetal: false,
+            id: 237,
+            hasMemory: false,
+            phaseOffset: Math.random() * Math.PI * 2,
+            isLeaf: true
+        });
+
+        // Dibujar estrella
+        function drawStar(star, pulseIntensity = 1) {
+            ctx.fillStyle = star.color;
+            ctx.globalAlpha = 0.3 + (0.7 * pulseIntensity);
+            ctx.beginPath();
+            ctx.arc(star.x, star.y, star.radius * (1 + pulseIntensity * 0.5), 0, Math.PI * 2);
+            ctx.fill();
+
+            // Brillo adicional para estrellas destacadas
+            if (star.isHighlighted) {
+                ctx.fillStyle = star.color;
+                ctx.globalAlpha = 0.5 * pulseIntensity;
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.radius * 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.globalAlpha = 1;
+        }
+
+        // Dibujar constelación (estrella de 5 puntas + octógono centro + tallo)
+        function drawConstellation() {
+            const petalStars = stars.filter(s => s.isPetal && s.id >= 0 && s.id <= 9);
+            
+            // Dibujar estrella de 5 puntas con amarillo patito claro
+            ctx.strokeStyle = 'rgba(255, 250, 100, 0.8)'; // Amarillo patito claro
+            ctx.lineWidth = 2.5;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            
+            for (let i = 0; i < petalStars.length; i++) {
+                const current = petalStars[i];
+                const next = petalStars[(i + 1) % petalStars.length];
+                
+                ctx.beginPath();
+                ctx.moveTo(current.x, current.y);
+                ctx.lineTo(next.x, next.y);
+                ctx.stroke();
+            }
+
+            // Dibujar octógono en el centro con anaranjado claro
+            ctx.strokeStyle = 'rgba(255, 165, 100, 0.8)'; // Anaranjado claro
+            ctx.lineWidth = 2.5;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            
+            const octagonStars = stars.filter(s => s.id >= 10 && s.id <= 17);
+            
+            for (let i = 0; i < octagonStars.length; i++) {
+                const current = octagonStars[i];
+                const next = octagonStars[(i + 1) % octagonStars.length];
+                
+                ctx.beginPath();
+                ctx.moveTo(current.x, current.y);
+                ctx.lineTo(next.x, next.y);
+                ctx.stroke();
+            }
+
+            // Dibujar tallo (tronco) con líneas verdes claras
+            ctx.strokeStyle = 'rgba(100, 200, 100, 0.8)'; // Verde claro
+            ctx.lineWidth = 2.5;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+
+            const stemStars = stars.filter(s => s.isStem).sort((a, b) => a.id - b.id);
+            
+            // Conectar el tallo principal (línea vertical)
+            for (let i = 0; i < stemStars.length - 1; i++) {
+                const current = stemStars[i];
+                const next = stemStars[i + 1];
+                
+                ctx.beginPath();
+                ctx.moveTo(current.x, current.y);
+                ctx.lineTo(next.x, next.y);
+                ctx.stroke();
+            }
+            
+            // SIN conexiones de hojas - solo el tallo vertical
+        }
+
+        // Animación
+        let animationTime = 0;
+        function animate() {
+            animationTime += 0.02;
+            
+            // Limpiar canvas
+            ctx.fillStyle = 'rgba(10, 14, 39, 0.1)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Dibujar todas las estrellas
+            for (let star of stars) {
+                let pulseIntensity = 1;
+                
+                // Parpadeo independiente para cada estrella con su propio offset de fase
+                if (star.isHighlighted) {
+                    pulseIntensity = 0.5 + 0.5 * Math.sin(animationTime * 3 + star.phaseOffset);
+                }
+
+                drawStar(star, pulseIntensity);
+            }
+
+            // Dibujar constelación si el mouse está dentro del rango (cerca del centro y tallo)
+            // Expandir significativamente el rango para incluir todo el tallo
+            const distToPetalCenter = Math.sqrt(
+                Math.pow(mousePos.x - centerX, 2) + 
+                Math.pow(mousePos.y - centerY, 2)
+            );
+
+            if (distToPetalCenter < externalRadius + 500) {
+                drawConstellation();
+            }
+
+            requestAnimationFrame(animate);
+        }
+        animate();
+
+        // Manejo del mouse
+        document.addEventListener('mousemove', (e) => {
+            mousePos.x = e.clientX;
+            mousePos.y = e.clientY;
+        });
+
+        // Clic en estrellas con recuerdos (todos los pétalos + estrella central)
+        document.addEventListener('click', (e) => {
+            const clickX = e.clientX;
+            const clickY = e.clientY;
+
+            for (let star of stars) {
+                if (!star.hasMemory) continue;
+
+                const dist = Math.sqrt(
+                    Math.pow(clickX - star.x, 2) + 
+                    Math.pow(clickY - star.y, 2)
+                );
+
+                // Área de detección más generosa: 20 píxeles
+                if (dist < 20) {
+                    const memory = memories[star.id];
+                    if (memory) {
+                        // Caso especial: estrella central con mensaje
+                        if (star.id === 18 && memory.titleText) {
+                            document.getElementById('memoryImage').style.display = 'none';
+                            document.getElementById('memoryDescription').innerHTML = `
+                                <div style="text-align: center;">
+                                    <h2 style="color: #ffc800; font-size: 24px; margin-bottom: 20px; font-weight: bold;">
+                                        ${memory.titleText}
+                                    </h2>
+                                    <p style="color: #e0e0e0; font-size: 18px; line-height: 1.8; font-style: italic;">
+                                        ${memory.bodyText}
+                                    </p>
+                                </div>
+                            `;
+                        } else {
+                            // Caso normal: foto + descripción
+                            document.getElementById('memoryImage').style.display = 'block';
+                            document.getElementById('memoryImage').src = memory.imageUrl;
+                            document.getElementById('memoryDescription').innerHTML = memory.description;
+                        }
+                        modal.classList.add('active');
+                    }
+                    return;
+                }
+            }
+        });
+
+        // Cerrar modal
+        closeBtn.addEventListener('click', () => {
+            modal.classList.remove('active');
+            document.getElementById('memoryImage').style.display = 'block'; // Resetear visibilidad
+        });
+
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.classList.remove('active');
+                document.getElementById('memoryImage').style.display = 'block'; // Resetear visibilidad
+            }
+        });
+
+        audio.volume = 0.3;
+        audio.play().catch(() => {});
+
+        function enableMusic() {
+            audio.play().catch(() => {});
+            document.removeEventListener('pointerdown', enableMusic);
+            document.removeEventListener('keydown', enableMusic);
+        }
+
+        document.addEventListener('pointerdown', enableMusic, { once: true });
+        document.addEventListener('keydown', enableMusic, { once: true });
+    </script>
+</body>
+</html>
